@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -16,7 +17,7 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all
+		return true
 	},
 }
 
@@ -24,7 +25,7 @@ type GameServer struct {
 	gameManager    *game.GameManager
 	matchmaker     *matchmaking.MatchmakingManager
 	ugnLogger      *ugn.GameLogger
-	playerSessions map[string]*websocket.Conn // playerID -> connection
+	playerSessions map[string]*websocket.Conn
 }
 
 func NewGameServer() *GameServer {
@@ -38,6 +39,23 @@ func NewGameServer() *GameServer {
 	gs.matchmaker.Start()
 
 	return gs
+}
+
+func sendJSONMessage(conn *websocket.Conn, msgType game.MessageType, payload interface{}) error {
+	msg := game.WebSocketMessage{
+		Type:    msgType,
+		Payload: payload,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %v", err)
+	}
+	return conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func sendGameStateToPlayer(session *game.GameSession, player *game.Player) error {
+	gameState := session.GetGameStateForPlayer(player)
+	return sendJSONMessage(player.Conn, game.MessageTypeGameState, gameState)
 }
 
 func (gs *GameServer) onMatchFound(match *matchmaking.GameMatch) error {
@@ -75,10 +93,13 @@ func (gs *GameServer) onMatchFound(match *matchmaking.GameMatch) error {
 	}
 
 	for _, player := range session.Players {
-		welcomeMsg := fmt.Sprintf("Match found! Game ID: %s\nYou are player %s\n%s",
-			match.GameID, player.Symbol, session.GetGameStatus())
-		session.SendToPlayer(player, welcomeMsg)
-		session.SendToPlayer(player, session.Board.GetBoardDisplay())
+		err := sendGameStateToPlayer(session, player)
+		if err != nil {
+			log.Printf("Failed to send game state to player %s: %v", player.Name, err)
+		}
+
+		welcomeMsg := fmt.Sprintf("Match found! Game ID: %s. You are player %s", match.GameID, player.Symbol)
+		sendJSONMessage(player.Conn, game.MessageTypeInfo, game.InfoPayload{Message: welcomeMsg})
 	}
 
 	log.Printf("Game %s started with players %s (%s) and %s (%s)",
@@ -120,8 +141,11 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	gs.playerSessions[playerID] = conn
 	defer delete(gs.playerSessions, playerID)
 
-	welcomeMsg := fmt.Sprintf("Welcome %s! Finding you a match...\nPlayer ID: %s", playerName, playerID)
-	conn.WriteMessage(websocket.TextMessage, []byte(welcomeMsg))
+	sendJSONMessage(conn, game.MessageTypeWelcome, game.WelcomePayload{
+		PlayerID:   playerID,
+		PlayerName: playerName,
+		Message:    fmt.Sprintf("Welcome %s! Finding you a match...", playerName),
+	})
 
 	log.Printf("Player %s (%s) connected from %s", playerName, playerID, r.RemoteAddr)
 
@@ -135,12 +159,12 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	err = gs.matchmaker.AddPlayer(playerRequest)
 	if err != nil {
 		log.Printf("Error adding player to matchmaker: %v", err)
-		conn.WriteMessage(websocket.TextMessage, []byte("Error: "+err.Error()))
+		sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: err.Error()})
 		return
 	}
 
 	queueMsg := fmt.Sprintf("You're in the matchmaking queue. Players waiting: %d", gs.matchmaker.GetTotalQueueSize())
-	conn.WriteMessage(websocket.TextMessage, []byte(queueMsg))
+	sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: queueMsg})
 
 	var currentGameID string
 	var currentSession *game.GameSession
@@ -158,16 +182,16 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Received message '%s' from %s (%s)", moveStr, playerName, playerID)
 
 			if moveStr == "quit" || moveStr == "exit" {
-				conn.WriteMessage(websocket.TextMessage, []byte("Goodbye!"))
+				sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: "Goodbye!"})
 				break
 			}
 
 			if moveStr == "status" {
 				if currentSession != nil {
-					conn.WriteMessage(websocket.TextMessage, []byte(currentSession.GetGameStatus()))
+					sendGameStateToPlayer(currentSession, currentPlayer)
 				} else {
 					statusMsg := fmt.Sprintf("Waiting for match... Players in queue: %d", gs.matchmaker.GetTotalQueueSize())
-					conn.WriteMessage(websocket.TextMessage, []byte(statusMsg))
+					sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: statusMsg})
 				}
 				continue
 			}
@@ -176,10 +200,10 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				helpMsg := "Commands:\n" +
 					"  A1-I9: Make a move (e.g., A1, B5, I9)\n" +
 					"  R or resign: Resign from the game\n" +
-					"  board/show: Display the current board\n" +
+					"  board/show: Request board update\n" +
 					"  status: Show game status\n" +
 					"  quit/exit: Leave the game"
-				conn.WriteMessage(websocket.TextMessage, []byte(helpMsg))
+				sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: helpMsg})
 				continue
 			}
 
@@ -203,129 +227,210 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if currentSession == nil {
-					conn.WriteMessage(websocket.TextMessage, []byte("Still waiting for a match... Type 'status' for queue info"))
+					sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{
+						Message: "Still waiting for a match... Type 'status' for queue info",
+					})
 					continue
 				}
 			}
 
 			if moveStr == "board" || moveStr == "show" {
-				conn.WriteMessage(websocket.TextMessage, []byte(currentSession.Board.GetBoardDisplay()))
+				sendGameStateToPlayer(currentSession, currentPlayer)
 				continue
 			}
 
 			if game.IsResignation(moveStr) {
 				err := currentSession.ResignGame(currentPlayer)
 				if err != nil {
-					conn.WriteMessage(websocket.TextMessage, []byte("Cannot resign: "+err.Error()))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Cannot resign: " + err.Error()})
 					continue
 				}
 
 				resignMsg := fmt.Sprintf("Player %s (%s) has resigned!", playerName, currentPlayer.Symbol)
-				currentSession.BroadcastToAll(resignMsg)
-
-				currentSession.BroadcastToAll(currentSession.GetGameStatus())
-
-				var finalMsg string
-				if currentSession.Winner == game.X {
-					finalMsg = "Player X wins by resignation!"
-				} else {
-					finalMsg = "Player O wins by resignation!"
+				for _, player := range currentSession.Players {
+					if player != nil {
+						sendJSONMessage(player.Conn, game.MessageTypeInfo, game.InfoPayload{Message: resignMsg})
+						sendGameStateToPlayer(currentSession, player)
+					}
 				}
-				currentSession.BroadcastToAll(finalMsg)
+
+				var winnerName string
+				if currentSession.Winner == game.X {
+					winnerName = currentSession.Players[0].Name
+					if currentSession.Players[0].Symbol == game.O {
+						winnerName = currentSession.Players[1].Name
+					}
+				} else {
+					winnerName = currentSession.Players[1].Name
+					if currentSession.Players[1].Symbol == game.X {
+						winnerName = currentSession.Players[0].Name
+					}
+				}
+
+				gameOverPayload := game.GameOverPayload{
+					Winner:     currentSession.Winner.String(),
+					WinnerName: winnerName,
+					Message:    fmt.Sprintf("%s wins by resignation!", winnerName),
+					Comment:    "resignation",
+				}
+
+				for _, player := range currentSession.Players {
+					if player != nil {
+						sendJSONMessage(player.Conn, game.MessageTypeGameOver, gameOverPayload)
+					}
+				}
 				continue
 			}
 
 			if moveStr == "DRAW" {
 				err := currentSession.OfferDraw(currentPlayer)
 				if err != nil {
-					conn.WriteMessage(websocket.TextMessage, []byte("Cannot offer draw: "+err.Error()))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Cannot offer draw: " + err.Error()})
 					continue
 				}
 
 				opponent := currentSession.GetOpponent(currentPlayer)
 				if opponent != nil {
-					currentSession.SendToPlayer(opponent, fmt.Sprintf("Player %s (%s) offers a draw", playerName, currentPlayer.Symbol))
+					drawOfferMsg := fmt.Sprintf("Player %s has offered a draw. Type ACCEPT_DRAW or DECLINE_DRAW", playerName)
+					sendJSONMessage(opponent.Conn, game.MessageTypeDrawOffer, game.DrawOfferPayload{
+						OfferedBy: playerName,
+						Message:   drawOfferMsg,
+					})
 				}
+				sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: "Draw offer sent"})
 				continue
 			}
 
 			if moveStr == "ACCEPT_DRAW" {
 				if !currentSession.DrawOfferPending {
-					conn.WriteMessage(websocket.TextMessage, []byte("No draw offer pending"))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "No draw offer pending"})
 					continue
 				}
 
 				if currentSession.DrawOfferedBy == currentPlayer {
-					conn.WriteMessage(websocket.TextMessage, []byte("You cannot accept your own draw offer"))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Cannot accept your own draw offer"})
 					continue
 				}
 
 				err := currentSession.AcceptDraw()
 				if err != nil {
-					conn.WriteMessage(websocket.TextMessage, []byte("Cannot accept draw: "+err.Error()))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Error accepting draw: " + err.Error()})
 					continue
 				}
 
-				currentSession.BroadcastToAll("Draw offer accepted! Game ended in a draw.")
-				currentSession.BroadcastToAll(currentSession.GetGameStatus())
+				for _, player := range currentSession.Players {
+					if player != nil {
+						sendJSONMessage(player.Conn, game.MessageTypeInfo, game.InfoPayload{Message: "Draw offer accepted! Game ended in a draw."})
+						sendGameStateToPlayer(currentSession, player)
+					}
+				}
+
+				gameOverPayload := game.GameOverPayload{
+					Winner:     "Draw",
+					WinnerName: "Draw",
+					Message:    "Game ended in a draw by agreement",
+					Comment:    "agreement",
+				}
+
+				for _, player := range currentSession.Players {
+					if player != nil {
+						sendJSONMessage(player.Conn, game.MessageTypeGameOver, gameOverPayload)
+					}
+				}
 				continue
 			}
 
 			if moveStr == "DECLINE_DRAW" {
 				if !currentSession.DrawOfferPending {
-					conn.WriteMessage(websocket.TextMessage, []byte("No draw offer pending"))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "No draw offer pending"})
 					continue
 				}
 
 				if currentSession.DrawOfferedBy == currentPlayer {
-					conn.WriteMessage(websocket.TextMessage, []byte("You cannot decline your own draw offer"))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Cannot decline your own draw offer"})
 					continue
 				}
 
 				err := currentSession.DeclineDraw()
 				if err != nil {
-					conn.WriteMessage(websocket.TextMessage, []byte("Cannot decline draw: "+err.Error()))
+					sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Error declining draw: " + err.Error()})
 					continue
 				}
 
 				opponent := currentSession.GetOpponent(currentPlayer)
 				if opponent != nil {
-					currentSession.SendToPlayer(opponent, "Draw offer declined")
+					sendJSONMessage(opponent.Conn, game.MessageTypeInfo, game.InfoPayload{Message: "Draw offer declined"})
 				}
+				sendJSONMessage(conn, game.MessageTypeInfo, game.InfoPayload{Message: "Draw offer declined"})
 				continue
 			}
 
+			// Try to parse as a move
 			move, err := game.ParseMove(moveStr)
 			if err != nil {
-				conn.WriteMessage(websocket.TextMessage, []byte("Invalid move format: "+err.Error()))
+				sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Invalid move format: " + err.Error()})
 				continue
 			}
 
 			err = currentSession.MakeMove(currentPlayer, move)
 			if err != nil {
-				conn.WriteMessage(websocket.TextMessage, []byte("Invalid move: "+err.Error()))
+				sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Invalid move: " + err.Error()})
 				continue
 			}
 
-			moveMsg := fmt.Sprintf("Player %s (%s) played %s",
-				playerName, currentPlayer.Symbol, moveStr)
-			currentSession.BroadcastToAll(moveMsg)
+			movePayload := game.MovePayload{
+				PlayerName:   playerName,
+				PlayerSymbol: currentPlayer.Symbol.String(),
+				Move:         moveStr,
+				BoardIndex:   move.BoardIndex,
+				Position:     move.Position,
+			}
 
-			currentSession.BroadcastToAll(currentSession.Board.GetBoardDisplay())
-
-			currentSession.BroadcastToAll(currentSession.GetGameStatus())
+			for _, player := range currentSession.Players {
+				if player != nil {
+					sendJSONMessage(player.Conn, game.MessageTypeMove, movePayload)
+					sendGameStateToPlayer(currentSession, player)
+				}
+			}
 
 			if currentSession.Finished {
-				var finalMsg string
+				var winnerName string
+				var winner string
+
 				switch currentSession.Winner {
 				case game.X:
-					finalMsg = "Player X wins the Ultimate Tic-Tac-Toe!"
+					winner = "X"
+					for _, p := range currentSession.Players {
+						if p != nil && p.Symbol == game.X {
+							winnerName = p.Name
+							break
+						}
+					}
 				case game.O:
-					finalMsg = "Player O wins the Ultimate Tic-Tac-Toe!"
+					winner = "O"
+					for _, p := range currentSession.Players {
+						if p != nil && p.Symbol == game.O {
+							winnerName = p.Name
+							break
+						}
+					}
 				default:
-					finalMsg = "Game ended in a draw! Good game!"
+					winner = "Draw"
+					winnerName = "Draw"
 				}
-				currentSession.BroadcastToAll(finalMsg)
+
+				gameOverPayload := game.GameOverPayload{
+					Winner:     winner,
+					WinnerName: winnerName,
+					Message:    fmt.Sprintf("Game Over - %s!", currentSession.GetGameStatus()),
+					Comment:    "",
+				}
+
+				for _, player := range currentSession.Players {
+					if player != nil {
+						sendJSONMessage(player.Conn, game.MessageTypeGameOver, gameOverPayload)
+					}
+				}
 			}
 		}
 	}
@@ -337,7 +442,9 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Player %s (%s) disconnected from game %s", playerName, playerID, currentGameID)
 
 		if opponent := currentSession.GetOpponent(currentPlayer); opponent != nil {
-			currentSession.SendToPlayer(opponent, fmt.Sprintf("Player %s has disconnected", playerName))
+			sendJSONMessage(opponent.Conn, game.MessageTypeInfo, game.InfoPayload{
+				Message: fmt.Sprintf("Player %s has disconnected", playerName),
+			})
 		}
 	} else {
 		log.Printf("Player %s (%s) disconnected while in matchmaking queue", playerName, playerID)

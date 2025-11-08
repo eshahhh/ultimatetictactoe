@@ -385,6 +385,67 @@ func (gs *GameSession) SetLogger(logger GameLogger) {
 	gs.Logger = logger
 }
 
+func (gs *GameSession) GetGameStateForPlayer(player *Player) *GameStatePayload {
+	gs.mutex.RLock()
+	defer gs.mutex.RUnlock()
+
+	playerXName := ""
+	playerOName := ""
+	for _, p := range gs.Players {
+		if p != nil {
+			if p.Symbol == X {
+				playerXName = p.Name
+			} else {
+				playerOName = p.Name
+			}
+		}
+	}
+
+	yourSymbol := ""
+	if player != nil {
+		if player.Symbol == X {
+			yourSymbol = "X"
+		} else {
+			yourSymbol = "O"
+		}
+	}
+
+	currentTurn := ""
+	if gs.Board.CurrentTurn == X {
+		currentTurn = "X"
+	} else {
+		currentTurn = "O"
+	}
+
+	gameStatus := "in_progress"
+	winner := ""
+	if gs.Finished {
+		gameStatus = "finished"
+		switch gs.Winner {
+		case X:
+			winner = "X"
+		case O:
+			winner = "O"
+		case Empty:
+			winner = "Draw"
+		}
+	}
+
+	return &GameStatePayload{
+		GameID:      gs.ID,
+		Board:       gs.Board.GetBoardStateData(),
+		CurrentTurn: currentTurn,
+		YourSymbol:  yourSymbol,
+		ActiveBoard: gs.Board.ActiveBoard,
+		GameStatus:  gameStatus,
+		Winner:      winner,
+		PlayerXName: playerXName,
+		PlayerOName: playerOName,
+		UGNMoves:    gs.GetUGNMoves(),
+		IsYourTurn:  player != nil && gs.Board.CurrentTurn == player.Symbol && !gs.Finished,
+	}
+}
+
 type GameManager struct {
 	sessions map[string]*GameSession
 	mutex    sync.RWMutex

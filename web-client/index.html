@@ -21,19 +21,44 @@
         <div id="game-panel" class="panel" style="display: none;">
             <div id="status-area">
                 <div id="connection-status">Disconnected</div>
-                <div id="game-info"></div>
+                <div id="game-info">
+                    <div class="info-row">
+                        <span id="game-id">Game ID: -</span>
+                        <span id="your-symbol">You: -</span>
+                    </div>
+                    <div class="info-row">
+                        <span id="player-x">X: -</span>
+                        <span id="player-o">O: -</span>
+                    </div>
+                    <div class="info-row">
+                        <span id="current-turn">Current Turn: -</span>
+                        <span id="game-status">Status: Waiting</span>
+                    </div>
+                </div>
             </div>
 
-            <div id="board-container">
-                <pre id="board-display"></pre>
+            <div class="game-container">
+                <div id="board-wrapper">
+                    <div id="ultimate-board">
+                    </div>
+                </div>
+
+                <div id="ugn-panel">
+                    <h3>Game Notation (UGN)</h3>
+                    <div id="ugn-moves-container">
+                        <div id="ugn-moves"></div>
+                    </div>
+                    <div id="move-input-section">
+                        <input type="text" id="move-input" placeholder="e.g., E5" />
+                        <button onclick="sendMove()">Send Move</button>
+                    </div>
+                </div>
             </div>
 
             <div id="controls">
-                <input type="text" id="move-input" placeholder="Enter move (e.g., A5, D2, I9)" />
-                <button onclick="sendMove()">Send Move</button>
-                <button onclick="showBoard()">Show Board</button>
-                <button onclick="showStatus()">Status</button>
-                <button onclick="showHelp()">Help</button>
+                <button onclick="offerDraw()">Offer Draw</button>
+                <button onclick="resign()">Resign</button>
+                <button onclick="showStatus()">Refresh Status</button>
                 <button onclick="disconnect()">Disconnect</button>
             </div>
 

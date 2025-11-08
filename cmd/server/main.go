@@ -235,6 +235,66 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			if moveStr == "DRAW" {
+				err := currentSession.OfferDraw(currentPlayer)
+				if err != nil {
+					conn.WriteMessage(websocket.TextMessage, []byte("Cannot offer draw: "+err.Error()))
+					continue
+				}
+
+				opponent := currentSession.GetOpponent(currentPlayer)
+				if opponent != nil {
+					currentSession.SendToPlayer(opponent, fmt.Sprintf("Player %s (%s) offers a draw", playerName, currentPlayer.Symbol))
+				}
+				continue
+			}
+
+			if moveStr == "ACCEPT_DRAW" {
+				if !currentSession.DrawOfferPending {
+					conn.WriteMessage(websocket.TextMessage, []byte("No draw offer pending"))
+					continue
+				}
+
+				if currentSession.DrawOfferedBy == currentPlayer {
+					conn.WriteMessage(websocket.TextMessage, []byte("You cannot accept your own draw offer"))
+					continue
+				}
+
+				err := currentSession.AcceptDraw()
+				if err != nil {
+					conn.WriteMessage(websocket.TextMessage, []byte("Cannot accept draw: "+err.Error()))
+					continue
+				}
+
+				currentSession.BroadcastToAll("Draw offer accepted! Game ended in a draw.")
+				currentSession.BroadcastToAll(currentSession.GetGameStatus())
+				continue
+			}
+
+			if moveStr == "DECLINE_DRAW" {
+				if !currentSession.DrawOfferPending {
+					conn.WriteMessage(websocket.TextMessage, []byte("No draw offer pending"))
+					continue
+				}
+
+				if currentSession.DrawOfferedBy == currentPlayer {
+					conn.WriteMessage(websocket.TextMessage, []byte("You cannot decline your own draw offer"))
+					continue
+				}
+
+				err := currentSession.DeclineDraw()
+				if err != nil {
+					conn.WriteMessage(websocket.TextMessage, []byte("Cannot decline draw: "+err.Error()))
+					continue
+				}
+
+				opponent := currentSession.GetOpponent(currentPlayer)
+				if opponent != nil {
+					currentSession.SendToPlayer(opponent, "Draw offer declined")
+				}
+				continue
+			}
+
 			move, err := game.ParseMove(moveStr)
 			if err != nil {
 				conn.WriteMessage(websocket.TextMessage, []byte("Invalid move format: "+err.Error()))

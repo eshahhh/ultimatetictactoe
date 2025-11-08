@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Tic-Tac-Toe</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Ultimate Tic-Tac-Toe</h1>
+
+        <div id="connection-panel" class="panel">
+            <h2>Connect to Game</h2>
+            <input type="text" id="player-name" placeholder="Enter your name" />
+            <button id="connect-btn" onclick="connect()">Connect</button>
+        </div>
+
+        <div id="game-panel" class="panel" style="display: none;">
+            <div id="status-area">
+                <div id="connection-status">Disconnected</div>
+                <div id="game-info"></div>
+            </div>
+
+            <div id="board-container">
+                <pre id="board-display"></pre>
+            </div>
+
+            <div id="controls">
+                <input type="text" id="move-input" placeholder="Enter move (e.g., A5, D2, I9)" />
+                <button onclick="sendMove()">Send Move</button>
+                <button onclick="showBoard()">Show Board</button>
+                <button onclick="showStatus()">Status</button>
+                <button onclick="showHelp()">Help</button>
+                <button onclick="disconnect()">Disconnect</button>
+            </div>
+
+            <div id="messages">
+                <h3>Messages</h3>
+                <div id="message-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

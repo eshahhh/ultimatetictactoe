@@ -18,14 +18,16 @@ type Player struct {
 }
 
 type GameSession struct {
-	ID       string
-	Board    *UltimateBoard
-	Players  [2]*Player
-	Started  bool
-	Finished bool
-	Winner   CellState
-	Logger   GameLogger
-	mutex    sync.RWMutex
+	ID               string
+	Board            *UltimateBoard
+	Players          [2]*Player
+	Started          bool
+	Finished         bool
+	Winner           CellState
+	Logger           GameLogger
+	DrawOfferPending bool
+	DrawOfferedBy    *Player
+	mutex            sync.RWMutex
 }
 
 type GameLogger interface {
@@ -38,11 +40,13 @@ type GameLogger interface {
 
 func NewGameSession(id string) *GameSession {
 	return &GameSession{
-		ID:      id,
-		Board:   NewUltimateBoard(),
-		Started: false,
-		Winner:  Empty,
-		Logger:  nil,
+		ID:               id,
+		Board:            NewUltimateBoard(),
+		Started:          false,
+		Winner:           Empty,
+		Logger:           nil,
+		DrawOfferPending: false,
+		DrawOfferedBy:    nil,
 	}
 }
 
@@ -262,6 +266,64 @@ func (gs *GameSession) ResignGame(player *Player) error {
 		if err != nil {
 		}
 	}
+
+	return nil
+}
+
+func (gs *GameSession) OfferDraw(player *Player) error {
+	gs.mutex.Lock()
+	defer gs.mutex.Unlock()
+
+	if !gs.Started {
+		return fmt.Errorf("game has not started yet")
+	}
+
+	if gs.Finished {
+		return fmt.Errorf("game is already finished")
+	}
+
+	if gs.DrawOfferPending {
+		return fmt.Errorf("draw offer already pending")
+	}
+
+	gs.DrawOfferPending = true
+	gs.DrawOfferedBy = player
+
+	return nil
+}
+
+func (gs *GameSession) AcceptDraw() error {
+	gs.mutex.Lock()
+	defer gs.mutex.Unlock()
+
+	if !gs.DrawOfferPending {
+		return fmt.Errorf("no draw offer pending")
+	}
+
+	gs.Finished = true
+	gs.Winner = Empty
+	gs.DrawOfferPending = false
+	gs.DrawOfferedBy = nil
+
+	if gs.Logger != nil && gs.Logger.IsGameStarted() {
+		err := gs.Logger.EndGameWithComment("Draw", "Draw by agreement")
+		if err != nil {
+		}
+	}
+
+	return nil
+}
+
+func (gs *GameSession) DeclineDraw() error {
+	gs.mutex.Lock()
+	defer gs.mutex.Unlock()
+
+	if !gs.DrawOfferPending {
+		return fmt.Errorf("no draw offer pending")
+	}
+
+	gs.DrawOfferPending = false
+	gs.DrawOfferedBy = nil
 
 	return nil
 }

@@ -1,0 +1,217 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #ffffff;
+    color: #000000;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+h1 {
+    text-align: center;
+    color: #000;
+    margin-bottom: 30px;
+    text-shadow: none;
+}
+
+.panel {
+    background: #ffffff;
+    border-radius: 0;
+    padding: 20px;
+    box-shadow: none;
+    border: 1px solid #000;
+}
+
+#connection-panel {
+    max-width: 400px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#connection-panel h2 {
+    margin-bottom: 20px;
+    color: #000;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #000;
+    border-radius: 0;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    color: #000;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #000;
+}
+
+button {
+    padding: 12px 24px;
+    background: #ffffff;
+    color: #000;
+    border: 1px solid #000;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    margin: 5px;
+    transition: none;
+}
+
+button:hover {
+    background: #ffffff;
+}
+
+button:active {
+    transform: none;
+}
+
+#status-area {
+    margin-bottom: 20px;
+}
+
+#connection-status {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 0;
+    font-weight: bold;
+    margin-bottom: 10px;
+    background: transparent;
+    color: #000;
+    border: 1px solid #000;
+}
+
+#connection-status.connected {
+    background: transparent;
+    color: #000;
+    border-color: #000;
+}
+
+#connection-status.disconnected {
+    background: transparent;
+    color: #000;
+    border-color: #000;
+}
+
+#game-info {
+    padding: 10px;
+    background: #ffffff;
+    border-radius: 0;
+    margin-top: 10px;
+    font-size: 14px;
+    color: #000;
+    border: 1px solid #000;
+}
+
+#board-container {
+    background: #ffffff;
+    border-radius: 0;
+    padding: 20px;
+    margin: 20px 0;
+    overflow-x: auto;
+    border: 1px solid #000;
+}
+
+#board-display {
+    color: #000;
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0;
+    white-space: pre;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+#controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+#move-input {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+}
+
+#messages {
+    margin-top: 20px;
+}
+
+#messages h3 {
+    color: #000;
+    margin-bottom: 10px;
+}
+
+#message-list {
+    max-height: 300px;
+    overflow-y: auto;
+    background: #ffffff;
+    border-radius: 0;
+    padding: 15px;
+    border: 1px solid #000;
+}
+
+.message {
+    padding: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid #000;
+    background: #ffffff;
+    border-radius: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #000;
+}
+
+.message.server {
+    border-left-color: #000;
+}
+
+.message.error {
+    border-left-color: #000;
+    background: #ffffff;
+}
+
+.message.important {
+    border-left-color: #000;
+    background: #ffffff;
+    font-weight: bold;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    #board-display {
+        font-size: 10px;
+    }
+
+    #controls {
+        flex-direction: column;
+    }
+
+    #move-input {
+        width: 100%;
+    }
+
+    button {
+        width: 100%;
+    }
+}

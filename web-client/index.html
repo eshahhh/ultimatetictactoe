@@ -34,31 +34,31 @@
                         <span id="current-turn">Current Turn: -</span>
                         <span id="game-status">Status: Waiting</span>
                     </div>
+                    <div id="draw-offer-status" class="info-row" style="display: none;">
+                        <span id="draw-offer-text" class="draw-offer-indicator"></span>
+                    </div>
                 </div>
             </div>
 
             <div class="game-container">
-                <div id="board-wrapper">
-                    <div id="ultimate-board">
-                    </div>
-                </div>
-
                 <div id="ugn-panel">
                     <h3>Game Notation (UGN)</h3>
                     <div id="ugn-moves-container">
                         <div id="ugn-moves"></div>
                     </div>
-                    <div id="move-input-section">
-                        <input type="text" id="move-input" placeholder="e.g., E5" />
-                        <button onclick="sendMove()">Send Move</button>
+                </div>
+
+                <div id="board-wrapper">
+                    <div id="ultimate-board">
                     </div>
                 </div>
             </div>
 
             <div id="controls">
-                <button onclick="offerDraw()">Offer Draw</button>
-                <button onclick="resign()">Resign</button>
-                <button onclick="showStatus()">Refresh Status</button>
+                <button id="offer-draw-btn" onclick="offerDraw()">Offer Draw</button>
+                <button id="resign-btn" onclick="resign()">Resign</button>
+                <button id="refresh-btn" onclick="showStatus()">Refresh Status</button>
+                <button id="find-new-game-btn" onclick="findNewGame()" style="display: none;">Find New Game</button>
                 <button onclick="disconnect()">Disconnect</button>
             </div>
 

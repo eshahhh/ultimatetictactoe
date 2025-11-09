@@ -29,9 +29,25 @@ function updateGameInfo(state) {
     document.getElementById('current-turn').textContent = `Current Turn: ${state.current_turn}`;
 
     let statusText = state.game_status === 'finished' ?
-        `Game Over - ${state.winner}` :
+        `Game Over - ${state.winner}!` :
         state.is_your_turn ? 'Your Turn!' : 'Opponent\'s Turn';
-    document.getElementById('game-status').textContent = `Status: ${statusText}`;
+
+    const statusEl = document.getElementById('game-status');
+    statusEl.textContent = `Status: ${statusText}`;
+
+    if (state.game_status === 'finished') {
+        statusEl.classList.add('game-finished');
+        document.getElementById('find-new-game-btn').style.display = 'inline-block';
+        document.getElementById('offer-draw-btn').style.display = 'none';
+        document.getElementById('resign-btn').style.display = 'none';
+        document.getElementById('refresh-btn').style.display = 'none';
+    } else {
+        statusEl.classList.remove('game-finished');
+        document.getElementById('find-new-game-btn').style.display = 'none';
+        document.getElementById('offer-draw-btn').style.display = 'inline-block';
+        document.getElementById('resign-btn').style.display = 'inline-block';
+        document.getElementById('refresh-btn').style.display = 'inline-block';
+    }
 }
 
 function createBoard() {
@@ -43,12 +59,23 @@ function createBoard() {
         smallBoard.className = 'small-board';
         smallBoard.dataset.boardIndex = i;
 
+        const boardLabel = document.createElement('div');
+        boardLabel.className = 'board-label';
+        boardLabel.textContent = BOARD_LETTERS[i];
+        smallBoard.appendChild(boardLabel);
+
         for (let j = 0; j < 9; j++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
             cell.dataset.boardIndex = i;
             cell.dataset.cellIndex = j;
             cell.addEventListener('click', () => handleCellClick(i, j));
+
+            const cellLabel = document.createElement('div');
+            cellLabel.className = 'cell-label';
+            cellLabel.textContent = j + 1;
+            cell.appendChild(cellLabel);
+
             smallBoard.appendChild(cell);
         }
 
@@ -95,7 +122,25 @@ function renderBoard(state) {
             const cellValue = boardData.cells[cellIndex];
 
             cell.className = 'cell';
-            cell.textContent = cellValue || '';
+
+            let cellLabel = cell.querySelector('.cell-label');
+            if (!cellLabel) {
+                cellLabel = document.createElement('div');
+                cellLabel.className = 'cell-label';
+                cellLabel.textContent = cellIndex + 1;
+                cell.appendChild(cellLabel);
+            }
+
+            const cellContent = document.createElement('div');
+            cellContent.className = 'cell-content';
+            cellContent.textContent = cellValue || '';
+
+            const oldContent = cell.querySelector('.cell-content');
+            if (oldContent) {
+                oldContent.remove();
+            }
+
+            cell.insertBefore(cellContent, cellLabel);
 
             if (cellValue) {
                 cell.classList.add('filled', cellValue.toLowerCase());
@@ -136,11 +181,14 @@ function handleCellClick(boardIndex, cellIndex) {
     }
 
     const moveStr = BOARD_LETTERS[boardIndex] + (cellIndex + 1);
-    sendMove(moveStr);
+    sendMessage(moveStr);
 }
 
 function updateUGNNotation(moves) {
     const ugnMovesDiv = document.getElementById('ugn-moves');
+    const container = document.getElementById('ugn-moves-container');
+    const wasScrolledToBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+
     ugnMovesDiv.innerHTML = '';
 
     if (!moves || moves.length === 0) {
@@ -163,6 +211,12 @@ function updateUGNNotation(moves) {
             xMove.classList.add('current');
         }
         xMove.textContent = moves[i];
+
+        if (moves[i].includes('!')) xMove.classList.add('board-win');
+        if (moves[i].includes('/')) xMove.classList.add('board-draw');
+        if (moves[i].includes('#')) xMove.classList.add('game-win');
+        if (moves[i].includes('%')) xMove.classList.add('game-draw');
+
         pairDiv.appendChild(xMove);
 
         if (i + 1 < moves.length) {
@@ -172,14 +226,23 @@ function updateUGNNotation(moves) {
                 oMove.classList.add('current');
             }
             oMove.textContent = moves[i + 1];
+
+            if (moves[i + 1].includes('!')) oMove.classList.add('board-win');
+            if (moves[i + 1].includes('/')) oMove.classList.add('board-draw');
+            if (moves[i + 1].includes('#')) oMove.classList.add('game-win');
+            if (moves[i + 1].includes('%')) oMove.classList.add('game-draw');
+
             pairDiv.appendChild(oMove);
         }
 
         ugnMovesDiv.appendChild(pairDiv);
     }
 
-    const container = document.getElementById('ugn-moves-container');
-    container.scrollTop = container.scrollHeight;
+    if (wasScrolledToBottom) {
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
 }
 
 function handleMessage(data) {
@@ -235,20 +298,29 @@ function showDrawOfferButtons() {
 
     const acceptBtn = document.createElement('button');
     acceptBtn.textContent = 'Accept Draw';
-    acceptBtn.className = 'draw-response';
+    acceptBtn.className = 'draw-response accept-draw';
     acceptBtn.onclick = acceptDraw;
     controls.insertBefore(acceptBtn, controls.firstChild);
 
     const declineBtn = document.createElement('button');
     declineBtn.textContent = 'Decline Draw';
-    declineBtn.className = 'draw-response';
+    declineBtn.className = 'draw-response decline-draw';
     declineBtn.onclick = declineDraw;
     controls.insertBefore(declineBtn, controls.firstChild);
+
+    const drawStatus = document.getElementById('draw-offer-status');
+    const drawText = document.getElementById('draw-offer-text');
+    drawStatus.style.display = 'flex';
+    drawText.textContent = 'Draw Offer Pending - Please respond';
+    drawText.className = 'draw-offer-indicator pending';
 }
 
 function removeDrawOfferButtons() {
     const buttons = document.querySelectorAll('.draw-response');
     buttons.forEach(btn => btn.remove());
+
+    const drawStatus = document.getElementById('draw-offer-status');
+    drawStatus.style.display = 'none';
 }
 
 function connect() {
@@ -267,8 +339,6 @@ function connect() {
             document.getElementById('game-panel').style.display = 'block';
 
             createBoard();
-
-            document.getElementById('move-input').focus();
         };
 
         ws.onmessage = (event) => {
@@ -314,18 +384,6 @@ function sendMessage(message) {
     }
 }
 
-function sendMove(moveStr) {
-    if (!moveStr) {
-        const moveInput = document.getElementById('move-input');
-        moveStr = moveInput.value.trim().toUpperCase();
-        moveInput.value = '';
-    }
-
-    if (moveStr) {
-        sendMessage(moveStr);
-    }
-}
-
 function showStatus() {
     sendMessage('status');
 }
@@ -352,15 +410,23 @@ function declineDraw() {
     removeDrawOfferButtons();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const moveInput = document.getElementById('move-input');
-    const nameInput = document.getElementById('player-name');
+function findNewGame() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+    }
 
-    moveInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMove();
-        }
-    });
+    gameState = null;
+    document.getElementById('ultimate-board').innerHTML = '';
+    document.getElementById('ugn-moves').innerHTML = '';
+    document.getElementById('message-list').innerHTML = '';
+
+    setTimeout(() => {
+        connect();
+    }, 500);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const nameInput = document.getElementById('player-name');
 
     nameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {

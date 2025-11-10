@@ -118,21 +118,12 @@ func (gs *GameSession) GetUGNMoves() []string {
 		return []string{}
 	}
 
-	if concreteLogger, ok := gs.Logger.(interface {
-		GetCurrentGame() interface{ GetMovesString() string }
-	}); ok {
-		if game := concreteLogger.GetCurrentGame(); game != nil {
-			movesStr := game.GetMovesString()
-			if movesStr == "" {
-				return []string{}
-			}
-			moves := make([]string, 0)
-			moves = append(moves, splitMoves(movesStr)...)
-			return moves
-		}
+	movesStr := gs.Logger.GetUGNMovesString()
+	if movesStr == "" {
+		return []string{}
 	}
 
-	return []string{}
+	return splitMoves(movesStr)
 }
 
 func splitMoves(movesStr string) []string {

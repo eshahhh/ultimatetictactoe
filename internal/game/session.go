@@ -36,6 +36,7 @@ type GameLogger interface {
 	EndGame(result string) error
 	EndGameWithComment(result, comment string) error
 	IsGameStarted() bool
+	GetUGNMovesString() string
 }
 
 func NewGameSession(id string) *GameSession {

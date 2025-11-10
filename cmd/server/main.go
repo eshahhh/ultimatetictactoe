@@ -24,14 +24,14 @@ var upgrader = websocket.Upgrader{
 type GameServer struct {
 	gameManager    *game.GameManager
 	matchmaker     *matchmaking.MatchmakingManager
-	ugnLogger      *ugn.GameLogger
+	gamesDir       string
 	playerSessions map[string]*websocket.Conn
 }
 
 func NewGameServer() *GameServer {
 	gs := &GameServer{
 		gameManager:    game.NewGameManager(),
-		ugnLogger:      ugn.NewGameLogger("games"),
+		gamesDir:       "games",
 		playerSessions: make(map[string]*websocket.Conn),
 	}
 
@@ -55,6 +55,10 @@ func sendJSONMessage(conn *websocket.Conn, msgType game.MessageType, payload int
 
 func sendGameStateToPlayer(session *game.GameSession, player *game.Player) error {
 	gameState := session.GetGameStateForPlayer(player)
+	log.Printf("Sending game state to %s. UGN moves count: %d", player.Name, len(gameState.UGNMoves))
+	if len(gameState.UGNMoves) > 0 {
+		log.Printf("UGN moves: %v", gameState.UGNMoves)
+	}
 	return sendJSONMessage(player.Conn, game.MessageTypeGameState, gameState)
 }
 
@@ -72,7 +76,8 @@ func (gs *GameServer) onMatchFound(match *matchmaking.GameMatch) error {
 		player2.Connection, player2.Name,
 	)
 
-	session.SetLogger(gs.ugnLogger)
+	sessionLogger := ugn.NewGameLogger(gs.gamesDir)
+	session.SetLogger(sessionLogger)
 
 	gs.gameManager.AddSession(session)
 
@@ -89,6 +94,8 @@ func (gs *GameServer) onMatchFound(match *matchmaking.GameMatch) error {
 		err := session.Logger.StartGame(match.GameID, playerXName, playerOName)
 		if err != nil {
 			log.Printf("Failed to start game logging: %v", err)
+		} else {
+			log.Printf("Game logging started for game %s", match.GameID)
 		}
 	}
 
@@ -365,7 +372,6 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Try to parse as a move
 			move, err := game.ParseMove(moveStr)
 			if err != nil {
 				sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Invalid move format: " + err.Error()})
@@ -377,6 +383,8 @@ func (gs *GameServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				sendJSONMessage(conn, game.MessageTypeError, game.ErrorPayload{Message: "Invalid move: " + err.Error()})
 				continue
 			}
+
+			log.Printf("Move made successfully. Current UGN moves: %v", currentSession.GetUGNMoves())
 
 			movePayload := game.MovePayload{
 				PlayerName:   playerName,
@@ -460,7 +468,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `Ultimate Tic-Tac-Toe WebSocket Server with Matchmaking!
 
-Connect to: ws://localhost:8080/ws
+Connect to: ws://localhost:39171/ws
 Optional query parameter: ?name=YourName
 
 How it works:
@@ -485,10 +493,10 @@ Features:
 - Resignation support`)
 	})
 
-	log.Println("Ultimate Tic-Tac-Toe Server with Matchmaking starting on :8080")
-	log.Println("WebSocket endpoint: ws://localhost:8080/ws")
+	log.Println("Ultimate Tic-Tac-Toe Server with Matchmaking starting on :39171")
+	log.Println("WebSocket endpoint: ws://localhost:39171/ws")
 	log.Println("Optional query parameter: ?name=YourName")
 	log.Println("Matchmaking system: ACTIVE")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":39171", nil))
 }

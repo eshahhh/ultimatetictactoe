@@ -185,6 +185,9 @@ function handleCellClick(boardIndex, cellIndex) {
 }
 
 function updateUGNNotation(moves) {
+    console.log('updateUGNNotation called with moves:', moves);
+    console.log('Moves type:', typeof moves, 'Is Array:', Array.isArray(moves));
+
     const ugnMovesDiv = document.getElementById('ugn-moves');
     const container = document.getElementById('ugn-moves-container');
     const wasScrolledToBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
@@ -192,9 +195,12 @@ function updateUGNNotation(moves) {
     ugnMovesDiv.innerHTML = '';
 
     if (!moves || moves.length === 0) {
+        console.log('No moves to display');
         ugnMovesDiv.textContent = 'No moves yet';
         return;
     }
+
+    console.log(`Displaying ${moves.length} moves`);
 
     for (let i = 0; i < moves.length; i += 2) {
         const pairDiv = document.createElement('div');
@@ -211,6 +217,7 @@ function updateUGNNotation(moves) {
             xMove.classList.add('current');
         }
         xMove.textContent = moves[i];
+        console.log(`Move ${i}: ${moves[i]}`);
 
         if (moves[i].includes('!')) xMove.classList.add('board-win');
         if (moves[i].includes('/')) xMove.classList.add('board-draw');
@@ -226,6 +233,7 @@ function updateUGNNotation(moves) {
                 oMove.classList.add('current');
             }
             oMove.textContent = moves[i + 1];
+            console.log(`Move ${i + 1}: ${moves[i + 1]}`);
 
             if (moves[i + 1].includes('!')) oMove.classList.add('board-win');
             if (moves[i + 1].includes('/')) oMove.classList.add('board-draw');
@@ -248,13 +256,18 @@ function updateUGNNotation(moves) {
 function handleMessage(data) {
     try {
         const msg = JSON.parse(data);
+        console.log('Received message:', msg);
 
         switch (msg.type) {
             case 'welcome':
                 addMessage(msg.payload.message, 'important');
+                showMatchmakingLoader(true);
                 break;
 
             case 'game_state':
+                console.log('Game state received:', msg.payload);
+                console.log('UGN moves in payload:', msg.payload.ugn_moves);
+                hideMatchmakingLoader();
                 updateGameInfo(msg.payload);
                 renderBoard(msg.payload);
                 updateUGNNotation(msg.payload.ugn_moves);
@@ -270,6 +283,9 @@ function handleMessage(data) {
 
             case 'info':
                 addMessage(msg.payload.message, 'info');
+                if (msg.payload.message.includes('Match found')) {
+                    hideMatchmakingLoader();
+                }
                 break;
 
             case 'game_over':
@@ -423,6 +439,17 @@ function findNewGame() {
     setTimeout(() => {
         connect();
     }, 500);
+}
+
+function showMatchmakingLoader(show = true) {
+    const loader = document.getElementById('matchmaking-loader');
+    if (loader) {
+        loader.style.display = show ? 'flex' : 'none';
+    }
+}
+
+function hideMatchmakingLoader() {
+    showMatchmakingLoader(false);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

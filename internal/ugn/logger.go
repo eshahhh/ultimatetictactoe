@@ -35,6 +35,7 @@ func (gl *GameLogger) LogMove(move *game.Move, board *game.UltimateBoard, before
 	}
 	ugnMove := GenerateUGNMove(move, board, beforeGameState, beforeSmallState)
 	gl.ugnGame.AddMove(*ugnMove)
+	fmt.Printf("[UGN Logger] Move logged: %s, Total moves: %d\n", ugnMove.ToString(), len(gl.ugnGame.Moves))
 	return nil
 }
 
@@ -61,9 +62,21 @@ func (gl *GameLogger) EndGameWithComment(result, comment string) error {
 }
 
 func (gl *GameLogger) GetCurrentGame() *UGNGame {
+	if gl.ugnGame != nil {
+		fmt.Printf("[UGN Logger] GetCurrentGame called, moves count: %d\n", len(gl.ugnGame.Moves))
+	} else {
+		fmt.Printf("[UGN Logger] GetCurrentGame called, but ugnGame is nil\n")
+	}
 	return gl.ugnGame
 }
 
 func (gl *GameLogger) IsGameStarted() bool {
 	return gl.gameStarted
+}
+
+func (gl *GameLogger) GetUGNMovesString() string {
+	if gl.ugnGame == nil {
+		return ""
+	}
+	return gl.ugnGame.GetMovesString()
 }

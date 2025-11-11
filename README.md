@@ -14,6 +14,7 @@ go run cmd/server/main.go
 
 Frontend
 ```
+cd web-client
 python -m http.server 8080
 ```
 

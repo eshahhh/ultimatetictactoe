@@ -3,9 +3,7 @@
 I have created the server that both the cli client and a web client can connect to (most focus is on the webclient though)
 There is also a proper matchmaking queuing system and the web client properly connects to the server to be able to join matches, so a web client player can match against a cmd player. 
 
-For some reason nest is not working which means I can't deploy this project properly thats why I had to use a video demo :( 
-
-Feel free to download and check everything yourself!
+To test it out, navigate to the [https://ultimatetictactoe-eshahhh.vercel.app/] and then either open the link again in a new tab or send it to your friend. The server should automatically matchmake the two together (unless someone else joins at the exact same time lol) and you should be able to play a match of UTTT!
 
 Server
 ```
